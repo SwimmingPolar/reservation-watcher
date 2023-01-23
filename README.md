@@ -1,1 +1,1 @@
-[Go to README](https://github.com/SwimmingPolar/electrokerot-scraper)
+#### 미술관 티켓 매진 여부 추적 매크로

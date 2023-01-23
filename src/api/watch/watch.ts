@@ -53,17 +53,20 @@ export async function watch() {
 
     // Be sure to move calendar to the next month when the month is done
     for await (const [month, days] of Object.entries(times)) {
+      // Wait for all links to be appeared
+      await Promise.all(days.map(day => frame?.waitForSelector(day)))
       const availableDays = (await frame?.evaluate(days => {
         const availableDays = [] as string[]
         days
           // Find all available days
-          .map(day => document.querySelector(day))
+          .map(day => document.querySelector(day) || undefined)
           // Iterate each and check if it is available
           .forEach(dayLink => {
             // If it is not available, it has class holyday
             // If it is available, it does not have class holyday
+            // @Issue: if the dayLink is undefined, it will mark it as available
+            // this has to do with puppeteer logic (eg. timeout)
             const isAvailable = !dayLink?.classList.contains('holyday')
-            console.log(dayLink, isAvailable)
             if (isAvailable) {
               availableDays.push(dayLink?.getAttribute('id') || '')
             }
@@ -71,6 +74,7 @@ export async function watch() {
 
         return availableDays
       }, days)) as string[]
+
       if (availableDays.length > 0) {
         // Toggle alert
         shouldAlert = true
@@ -90,7 +94,6 @@ export async function watch() {
           const button = document.querySelector(
             'button.next'
           ) as HTMLButtonElement
-          console.log(button)
           button.click()
         })
 
