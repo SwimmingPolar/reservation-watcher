@@ -1,5 +1,4 @@
 import { TextChannel } from 'discord.js'
-import { ElementHandle } from 'puppeteer'
 import { getDiscordClient, getPage } from '../../helper'
 
 const TargetURL = 'http://www.kguide.kr/mmca001/'
@@ -13,6 +12,8 @@ export async function watch() {
       [key: string]: string
     }[]
   }
+  // If true, send message to discord
+  let shouldAlert = false
 
   try {
     // Do not track header
@@ -47,61 +48,39 @@ export async function watch() {
     // Days to check
     const times = {
       January: ['#day_27', '#day_28', '#day_29'],
-      February: ['#day_3', '#day_4', '#day_5']
+      February: ['#day_3', '#day_4', '#day_5', '#day_6']
     }
 
     // Be sure to move calendar to the next month when the month is done
     for await (const [month, days] of Object.entries(times)) {
-      const buttonsHandlers = (await Promise.all(
-        days.map(async day => await frame?.$(`a${day}`))
-      )) as ElementHandle[]
-      const tuples = days.map((day, index) => [
-        day,
-        buttonsHandlers[index]
-      ]) as [string, ElementHandle][]
-      for await (const [day, handler] of tuples) {
-        const hasTime = await handler?.evaluate((_, day) => {
-          const button = document.querySelector(day) as HTMLButtonElement
-          button?.click()
-
-          // Remember the all the list of times available
-          // Later, compare the length of the above list and
-          // the length of the list of times that are sold out.
-          // If they are the same, it means that there is time available.
-          const listOfTimes = Array.from(
-            document.querySelectorAll('#seq_table > li')
-          )
-          const listOfSoldOutTimes = listOfTimes.filter(time => {
-            const endTime = time?.querySelector(
-              'span.state.end'
-            ) as HTMLSpanElement
-
-            return endTime?.textContent === '매진'
+      const availableDays = (await frame?.evaluate(days => {
+        const availableDays = [] as string[]
+        days
+          // Find all available days
+          .map(day => document.querySelector(day))
+          // Iterate each and check if it is available
+          .forEach(dayLink => {
+            // If it is not available, it has class holyday
+            // If it is available, it does not have class holyday
+            const isAvailable = !dayLink?.classList.contains('holyday')
+            console.log(dayLink, isAvailable)
+            if (isAvailable) {
+              availableDays.push(dayLink?.getAttribute('id') || '')
+            }
           })
 
-          return listOfTimes.length !== listOfSoldOutTimes.length
-        }, day)
-
-        // If there's time available, push to the timeTable
-        let content
-        if (hasTime) {
-          const userId = process.env.YDH
-          content = {
-            [day]: `있어용 ------------<@${userId}>`
+        return availableDays
+      }, days)) as string[]
+      if (availableDays.length > 0) {
+        // Toggle alert
+        shouldAlert = true
+        // Format the data
+        availableDays.forEach(day => {
+          const content = {
+            [day]: '예약가능'
           }
-        } else {
-          content = {
-            [day]: '없어용'
-          }
-        }
-        timeTable[month] = timeTable[month]?.concat(content) || [content]
-
-        // Wait for ajax request to be done
-        await page.waitForResponse(response => {
-          return response.ok() && response.status() === 200
+          timeTable[month] = timeTable[month]?.concat(content) || [content]
         })
-        // Wait for 1 second
-        await page.waitForTimeout(1000)
       }
 
       // Move to the next month
@@ -129,13 +108,19 @@ export async function watch() {
     const channel = (await discordClient.channels.fetch(
       process.env.DISCORD_BOT_CHANNEL_ID || ''
     )) as TextChannel
+    const discordIds = [process.env.YDH, process.env.SSY] as string[]
+    const tags = discordIds.map(id => `<@${id}>`).join(' ')
 
-    channel.send(
-      JSON.stringify(timeTable, null, 2)
-        .replace(/({|}|\[|\]|"|,)/g, '')
-        .split('\n')
-        .filter(str => str.replace(/\s/g, '').length > 0)
-        .join('\n')
-    )
+    if (shouldAlert) {
+      channel.send(
+        tags +
+          '\n' +
+          JSON.stringify(timeTable, null, 2)
+            .replace(/({|}|\[|\]|"|,)/g, '')
+            .split('\n')
+            .filter(str => str.replace(/\s/g, '').length > 0)
+            .join('\n')
+      )
+    }
   }
 }

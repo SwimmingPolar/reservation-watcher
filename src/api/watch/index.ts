@@ -6,6 +6,7 @@ const router = Router()
 router.get('/watch', async (req, res, next: NextFunction) => {
   try {
     watch()
+    res.status(200).send()
   } catch (error) {
     // any error caught here have something to do with puppeteer or network (proxy)
     next(CrawlerInternalError())
