@@ -48,7 +48,7 @@ export async function watch() {
     // Days to check
     const times = {
       January: ['#day_27', '#day_28', '#day_29'],
-      February: ['#day_3', '#day_4', '#day_5', '#day_6']
+      February: ['#day_3', '#day_4', '#day_5']
     }
 
     // Be sure to move calendar to the next month when the month is done
@@ -121,6 +121,8 @@ export async function watch() {
             .filter(str => str.replace(/\s/g, '').length > 0)
             .join('\n')
       )
+    } else {
+      channel.send('예약 가능한 시간이 없습니다.')
     }
   }
 }

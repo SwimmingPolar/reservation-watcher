@@ -13,8 +13,7 @@ export async function initiateBrowser() {
       executablePath: isProduction
         ? process.env.PUPPETEER_EXECUTABLE_PATH?.trim()
         : puppeteer.executablePath(),
-      args,
-      headless: false
+      args
     })
 
     // re-open browser in case it crashes
