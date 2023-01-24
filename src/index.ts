@@ -46,5 +46,5 @@ async function init() {
 
   setInterval(async () => {
     await fetch(`http://localhost:${PORT}/watch`)
-  }, 60 * 1000)
+  }, 30 * 1000)
 })()
