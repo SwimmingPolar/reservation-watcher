@@ -42,6 +42,8 @@ async function init() {
     log.error('Crawler', error + '')
   }
 
+  await fetch(`http://localhost:${PORT}/watch`)
+
   setInterval(async () => {
     await fetch(`http://localhost:${PORT}/watch`)
   }, 60 * 1000)

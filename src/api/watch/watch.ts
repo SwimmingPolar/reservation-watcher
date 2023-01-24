@@ -48,38 +48,75 @@ export async function watch() {
     // Days to check
     const times = {
       January: ['#day_27', '#day_28', '#day_29'],
-      February: ['#day_3', '#day_4', '#day_5']
+      February: ['#day_4', '#day_5']
     }
 
     // Be sure to move calendar to the next month when the month is done
     for await (const [month, days] of Object.entries(times)) {
       // Wait for all links to be appeared
       await Promise.all(days.map(day => frame?.waitForSelector(day)))
-      const availableDays = (await frame?.evaluate(days => {
-        const availableDays = [] as string[]
-        days
-          // Find all available days
-          .map(day => document.querySelector(day) || undefined)
-          // Iterate each and check if it is available
-          .forEach(dayLink => {
-            // If it is not available, it has class holyday
-            // If it is available, it does not have class holyday
-            // @Issue: if the dayLink is undefined, it will mark it as available
-            // this has to do with puppeteer logic (eg. timeout)
-            const isAvailable = !dayLink?.classList.contains('holyday')
-            if (isAvailable) {
-              availableDays.push(dayLink?.getAttribute('id') || '')
-            }
-          })
+      const availableDaysButtons = (
+        await frame?.evaluate(
+          async days =>
+            days
+              // Find all available days
+              .map(
+                day =>
+                  (document.querySelector(day) as HTMLButtonElement) ||
+                  undefined
+              )
+              // Iterate each and check if it is available
+              .map(dayLink => {
+                // If it is not available, it has class holyday
+                // If it is available, it does not have class holyday
+                // @Issue: if the dayLink is undefined, it will mark it as available
+                // this has to do with puppeteer logic (eg. timeout)
+                const isAvailable = !dayLink?.classList.contains('holyday')
+                if (isAvailable) {
+                  // If available, click and see how many seats are available
+                  return dayLink?.getAttribute('id') || ''
+                }
+              }),
+          days
+        )
+      )?.filter(e => e) as string[]
 
-        return availableDays
-      }, days)) as string[]
+      const availableDays = [] as string[]
+      for await (const day of availableDaysButtons) {
+        // Click the dat button
+        await frame?.click(`#${day}`)
+        // Wait for the transition to finish
+        await frame?.waitForTimeout(1000)
+
+        // Select all the times available
+        const listOfTimes = Array.from(
+          (await frame?.$$('#seq_table > li')) || []
+        )
+        // Iterate each time and check the seats available
+        for await (const time of listOfTimes) {
+          // Find the number of seats available and convert it to number
+          const seatsAvailable = Number(
+            await time.evaluate(
+              node =>
+                node
+                  // Get the text content of the remaining seats tag
+                  .querySelector('span.state')
+                  // Remove all non-digit characters
+                  ?.textContent?.replace(/\D/g, '') || 0
+            )
+          )
+          if (seatsAvailable >= 2) {
+            // If there are more than 2 seats available, push the time to the list
+            availableDays.push(day)
+          }
+        }
+      }
 
       if (availableDays.length > 0) {
         // Toggle alert
         shouldAlert = true
-        // Format the data
-        availableDays.forEach(day => {
+        // Remove overlapping days and re-format the data
+        Array.from(new Set(availableDays)).forEach(day => {
           const content = {
             [day]: '예약가능'
           }
@@ -105,7 +142,7 @@ export async function watch() {
     }
   } finally {
     // Close the page when the task is done
-    await page.close()
+    // await page.close()
 
     // Get channel to send message
     const channel = (await discordClient.channels.fetch(
